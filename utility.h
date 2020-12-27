@@ -1,6 +1,3 @@
-#ifndef UTILITY_H_INCLUDED
-#define UTILITY_H_INCLUDED
-
 #include <iostream>
 #include <list>
 #include <sys/types.h>
@@ -75,4 +72,3 @@ int sendBroadcastMessage(int clientfd) {
 	return len;
 }
 
-#endif

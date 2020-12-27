@@ -1,93 +1,93 @@
 #include "utility.h"
 
-void init_server_config(int &sockfd, int &ret, int &epfd) {
-	struct sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(SERVER_PORT);
-	serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+int main(int argc, char *argv[]) {
+	sockaddr_in server_addr;
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(SERVER_PORT);
+	server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
-		perror("socket");
+	int server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (server_sockfd < 0) {
+		perror("server-socket");
 		exit(-1);
 	}
-	printf("socket created.\n");
+	printf("server socket created.\n");
 
-	ret = listen(sockfd, 10);
-	if (ret < 0) {
+	int ret_bind = bind(server_sockfd, 
+			(sockaddr *) &server_addr, 
+			sizeof(server_addr));
+	if (ret_bind < 0) {
+		perror("bind");
+		exit(-1);
+	}
+	printf("server bind seccessed.\n");
+
+	int ret_listen = listen(server_sockfd, 10);
+	if (ret_listen < 0) {
 		perror("listen");
 		exit(-1);
 	}
-	printf("Start to listen: %s\n", SERVER_IP);
+	printf("start to listen: %s\n", SERVER_IP);
 
-	epfd = epoll_create(EPOLL_SIZE);
+	int epfd = epoll_create(EPOLL_SIZE);
 	if (epfd < 0) {
-		perror("epoll");
+		perror("epoll-create");
 		exit(-1);
 	}
 	printf("epoll created, epollfd = %d\n", epfd);
 
-	//static struct epoll_event events[EPOLL_SIZE];
-
-	addfd(epfd, sockfd, true);
-
-	return;
-}
-
-int main(int argc, char *argv[]) {
-	int listener, ret, epfd;
-	init_server_config(listener, ret, epfd);
-	
-	static struct epoll_event events[EPOLL_SIZE];
+	epoll_event events[EPOLL_SIZE];
+	addfd(epfd, server_sockfd, true);
 
 	while (true) {
 		int epoll_events_count = epoll_wait(epfd, events, EPOLL_SIZE, -1);
 		if (epoll_events_count < 0) {
-			perror("epoll failure");
-			break;
+			perror("epoll_event");
+			exit(-1);
 		}
-		printf("epoll_event_count = %d\n", epoll_events_count);
+		printf("epoll_events_cout = %d\n", epoll_events_count);
 
 		for (int i = 0; i < epoll_events_count; i++) {
 			int sockfd = events[i].data.fd;
-			if(sockfd == listener) {
-				struct sockaddr_in client_address;
-				socklen_t client_addrLength = sizeof(struct sockaddr_in);
-				int clientfd = accept(listener, (struct sockaddr*) &client_address, &client_addrLength);
+			if (sockfd == server_sockfd) {
+				sockaddr_in client_addr;
+				socklen_t client_addr_length = sizeof(sockaddr_in);
 
-				printf("client connection fron: %s : %d (IP : port), clientfd = %d\n",
-						inet_ntoa(client_address.sin_addr),
-						ntohs(client_address.sin_port),
-						clientfd);
+				int client_sockfd = accept(server_sockfd, 
+						(sockaddr*) &client_addr, 
+						&client_addr_length);
+				printf("client connection from: %s : %d, clientfd = %d\n",
+						inet_ntoa(client_addr.sin_addr),
+						ntohs(client_addr.sin_port),
+						client_sockfd);
 
-				addfd(epfd, clientfd, true);
+				addfd(epfd, client_sockfd, true);
 
-				client_list.push_back(clientfd);
-				printf("Add new clientfd = %d to epoll\n", clientfd);
-				printf("Now there are %d clients int the char room\n", (int)client_list.size());
-				printf("werlcome message\n");
+				client_list.push_back(client_sockfd);
+				printf("Add new clientfd = %d to epoll.\n", client_sockfd);
+				printf("Now there are %d clients in the chat room\n");
 
+				printf("welcome message");
 				char message[BUF_SIZE];
-				memset(message, 0, sizeof(message));
-				sprintf(message, SERVER_WELCOME, clientfd);
+				memset(message, 0, BUF_SIZE);
+				sprintf(message, SERVER_WELCOME, client_sockfd);
 
-				int ret = send(clientfd, message, BUF_SIZE, 0);
-				if (ret < 0) {
-					perror("send error");
+				int ret_send = send(client_sockfd, message, BUF_SIZE, 0);
+				if (ret_send < 0) {
+					perror("send");
 					exit(-1);
 				}
 			} else {
-				int ret = sendBroadcastMessage(sockfd);
-				if (ret < 0) {
-					perror("send.. error");
+				int ret_tmp = sendBroadcastMessage(sockfd);
+				if (ret_tmp < 0) {
+					perror("other send");
 					exit(-1);
 				}
 			}
 		}
 	}
 	close(epfd);
-	close(listener);
+	close(server_sockfd);
 	return 0;
 }
-
 
